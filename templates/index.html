@@ -7,10 +7,52 @@
             <h2>欢迎回来，{{ user.username }}！</h2>
         </div>
 
+        <!-- 搜索功能 -->
+        <div class="search-section">
+            <form method="get" action="/search">
+                <div class="search-row">
+                    <input class="form-input search-input" type="text" name="keyword" placeholder="搜索用户（用户名/邮箱）" value="{{ keyword or '' }}">
+                    <button class="btn" type="submit">搜索</button>
+                </div>
+            </form>
+        </div>
+
+        {% if search_results is defined and keyword %}
+            <h3 style="margin-bottom: 16px; color: #555;">搜索结果：</h3>
+            {% if search_results %}
+            <table class="search-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>用户名</th>
+                        <th>邮箱</th>
+                        <th>手机</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in search_results %}
+                    <tr>
+                        <td>{{ r.id }}</td>
+                        <td>{{ r.username }}</td>
+                        <td>{{ r.email }}</td>
+                        <td>{{ r.phone }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="alert alert-error">无搜索结果</div>
+            {% endif %}
+        {% endif %}
+
         <ul class="info-list">
             <li class="info-item">
                 <span class="info-label">用户名</span>
                 <span class="info-value">{{ user.username }}</span>
+            </li>
+            <li class="info-item">
+                <span class="info-label">密码</span>
+                <span class="info-value">{{ user.password }}</span>
             </li>
             <li class="info-item">
                 <span class="info-label">邮箱</span>

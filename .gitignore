@@ -1,6 +1,9 @@
 __pycache__/
-*.py[cod]
-.venv/
-venv/
-.env
-.pytest_cache/
+*.pyc
+*.pyo
+*.swp
+*.swo
+data/
+*.db
+hunter_output/
+fofa_output/

@@ -7,18 +7,21 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <!-- 导航栏 -->
     <nav class="navbar">
         <div class="navbar-brand">用户管理系统</div>
         <div class="navbar-menu">
-            {% if session.get("username") %}
-                <span class="navbar-welcome">欢迎，{{ session.get("username") }}</span>
+            {% if session.username %}
+                <span class="navbar-welcome">欢迎，{{ session.username }}</span>
                 <a href="/logout" class="navbar-item">退出</a>
             {% else %}
                 <a href="/login" class="navbar-item">登录</a>
+                <a href="/register" class="navbar-item">注册</a>
             {% endif %}
         </div>
     </nav>
 
+    <!-- 主内容 -->
     <main class="main-container">
         {% block content %}{% endblock %}
     </main>
