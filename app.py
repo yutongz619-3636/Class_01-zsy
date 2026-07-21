@@ -1,13 +1,25 @@
 import sqlite3
 import os
-from flask import Flask, render_template, request, redirect, session, url_for
+import uuid
+import imghdr
+import mimetypes
+from flask import Flask, render_template, request, redirect, session, url_for, abort
 
 app = Flask(__name__)
 app.secret_key = "dev-key-2025"
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
+# 上传配置
+UPLOAD_DIR = "static/uploads"
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"}
+DANGEROUS_KEYWORDS = {".php", ".php3", ".php4", ".php5", ".phtml", ".py", ".pyc", ".jsp",
+                      ".jspx", ".asp", ".aspx", ".asa", ".cer", ".cgi", ".pl", ".sh",
+                      ".bash", ".exe", ".msi", ".bat", ".cmd", ".vbs", ".js", ".jar",
+                      ".war", ".htaccess", ".user.ini"}
+
 # 确保上传目录存在
-os.makedirs("static/uploads", exist_ok=True)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # 用户数据库（明文密码）
 USERS = {
@@ -45,7 +57,6 @@ def init_db():
             phone TEXT
         )
     ''')
-    # 插入默认用户（INSERT OR IGNORE 防止重复）
     c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES ('admin', 'admin123', 'admin@example.com', '13800138000')")
     c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES ('alice', 'alice2025', 'alice@example.com', '13900139001')")
     conn.commit()
@@ -92,7 +103,6 @@ def register():
         db_path = os.path.join("data", "users.db")
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
-        # 使用 f-string 字符串拼接（不安全的写法，用于演示）
         sql = f"INSERT INTO users (username, password, email, phone) VALUES ('{username}', '{password}', '{email}', '{phone}')"
         print(f"[SQL] {sql}")
         try:
@@ -116,7 +126,6 @@ def search():
         db_path = os.path.join("data", "users.db")
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
-        # 使用 f-string 字符串拼接（不安全的写法，用于演示）
         sql = f"SELECT id, username, email, phone FROM users WHERE username LIKE '%{keyword}%' OR email LIKE '%{keyword}%'"
         print(f"[SQL] {sql}")
         try:
@@ -146,13 +155,42 @@ def upload():
 
     if request.method == "POST":
         file = request.files.get("file")
-        if file and file.filename:
-            # 使用用户上传的原始文件名保存，不做任何检查
-            save_path = os.path.join("static/uploads", file.filename)
-            file.save(save_path)
-            file_url = url_for("static", filename=f"uploads/{file.filename}")
-        else:
+        if not file or not file.filename:
             error = "请选择一个文件"
+        else:
+            # 1. 净化文件名，去除路径穿越字符
+            safe_filename = os.path.basename(file.filename)
+
+            if not safe_filename or safe_filename == "":
+                error = "文件名无效"
+            else:
+                # 2. 检查文件名中是否含危险关键词（防双扩展名绕过）
+                filename_lower = safe_filename.lower()
+                has_dangerous = any(kw in filename_lower for kw in DANGEROUS_KEYWORDS)
+                if has_dangerous:
+                    error = "文件名包含不允许的关键词"
+                else:
+                    # 3. 检查文件扩展名
+                    ext = os.path.splitext(safe_filename)[1].lower()
+                    if ext not in ALLOWED_EXTENSIONS:
+                        error = f"不允许的文件类型: {ext}，仅支持图片格式 (jpg/png/gif/webp/bmp)"
+                    else:
+                        # 4. 检查 MIME 类型
+                        mime_type = file.content_type
+                        if mime_type not in ALLOWED_MIME_TYPES:
+                            error = f"不允许的文件 MIME 类型: {mime_type}"
+                        else:
+                            # 5. 用 UUID 重命名文件，防止覆盖和原始文件名泄露
+                            new_filename = f"{uuid.uuid4().hex}{ext}"
+                            save_path = os.path.join(UPLOAD_DIR, new_filename)
+                            file.save(save_path)
+
+                            # 6. 二次校验：读取文件头确认是真实图片
+                            if imghdr.what(save_path) is None:
+                                os.remove(save_path)
+                                error = "文件内容不是有效图片"
+                            else:
+                                file_url = url_for("static", filename=f"uploads/{new_filename}")
 
     return render_template("upload.html", file_url=file_url, error=error)
 
