@@ -1,9 +1,13 @@
 import sqlite3
 import os
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request, redirect, session, url_for
 
 app = Flask(__name__)
 app.secret_key = "dev-key-2025"
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+
+# 确保上传目录存在
+os.makedirs("static/uploads", exist_ok=True)
 
 # 用户数据库（明文密码）
 USERS = {
@@ -128,6 +132,29 @@ def search():
     username = session.get("username")
     user = USERS.get(username) if username else None
     return render_template("index.html", user=user, search_results=results, keyword=keyword)
+
+
+@app.route("/upload", methods=["GET", "POST"])
+def upload():
+    # 需要登录才能访问
+    username = session.get("username")
+    if not username:
+        return redirect("/login")
+
+    file_url = None
+    error = None
+
+    if request.method == "POST":
+        file = request.files.get("file")
+        if file and file.filename:
+            # 使用用户上传的原始文件名保存，不做任何检查
+            save_path = os.path.join("static/uploads", file.filename)
+            file.save(save_path)
+            file_url = url_for("static", filename=f"uploads/{file.filename}")
+        else:
+            error = "请选择一个文件"
+
+    return render_template("upload.html", file_url=file_url, error=error)
 
 
 if __name__ == "__main__":
