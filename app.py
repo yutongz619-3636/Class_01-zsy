@@ -83,7 +83,7 @@ def inject_current_user_id():
             db_path = os.path.join("data", "users.db")
             conn = sqlite3.connect(db_path)
             c = conn.cursor()
-            c.execute(f"SELECT id FROM users WHERE username = '{username}'")
+            c.execute("SELECT id FROM users WHERE username = ?", (username,))
             row = c.fetchone()
             if row:
                 user_id = row[0]
@@ -227,8 +227,14 @@ def upload():
 
 @app.route("/profile")
 def profile():
-    # 从 URL 参数获取 user_id，不验证权限
+    # 需要登录才能访问
+    username = session.get("username")
+    if not username:
+        return redirect("/login")
+
+    # 从 URL 参数获取 user_id（不做权限校验，可查看任意用户）
     user_id = request.args.get("user_id", type=int)
+    error = request.args.get("error", "")
     user_info = None
 
     if user_id:
@@ -236,7 +242,7 @@ def profile():
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
         try:
-            c.execute(f"SELECT id, username, email, phone, balance FROM users WHERE id = {user_id}")
+            c.execute("SELECT id, username, email, phone, balance FROM users WHERE id = ?", (user_id,))
             row = c.fetchone()
             if row:
                 user_info = {
@@ -251,27 +257,51 @@ def profile():
         finally:
             conn.close()
 
-    return render_template("profile.html", user_info=user_info)
+    return render_template("profile.html", user_info=user_info, error=error)
 
 
 @app.route("/recharge", methods=["POST"])
 def recharge():
-    user_id = request.form.get("user_id", type=int)
-    amount = request.form.get("amount", type=int, default=0)
+    # 需要登录才能访问
+    login_username = session.get("username")
+    if not login_username:
+        return redirect("/login")
 
-    if user_id is not None:
-        db_path = os.path.join("data", "users.db")
-        conn = sqlite3.connect(db_path)
-        c = conn.cursor()
-        try:
-            # 直接修改余额，不做正负校验
-            c.execute(f"UPDATE users SET balance = balance + {amount} WHERE id = {user_id}")
-            conn.commit()
-            print(f"[RECHARGE] user_id={user_id}, amount={amount}")
-        except Exception as e:
-            print(f"[SQL ERROR] {e}")
-        finally:
+    # 从 session 获取当前用户的 user_id，不能给他人充值
+    db_path = os.path.join("data", "users.db")
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    try:
+        # 获取当前登录用户的 ID
+        c.execute("SELECT id FROM users WHERE username = ?", (login_username,))
+        row = c.fetchone()
+        if not row:
+            return redirect("/login")
+        user_id = row[0]
+
+        amount = request.form.get("amount", type=int, default=0)
+
+        # 校验金额必须为正数
+        if amount <= 0:
             conn.close()
+            return redirect(f"/profile?user_id={user_id}&error=金额必须大于0")
+
+        # 设置合理上限（防止刷爆）
+        MAX_RECHARGE = 9999999
+        if amount > MAX_RECHARGE:
+            conn.close()
+            return redirect(f"/profile?user_id={user_id}&error=单次充值不能超过{MAX_RECHARGE}")
+
+        # 参数化查询更新余额
+        c.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, user_id))
+        conn.commit()
+        print(f"[RECHARGE] user={login_username}, id={user_id}, amount={amount}")
+
+    except Exception as e:
+        print(f"[RECHARGE ERROR] {e}")
+    finally:
+        conn.close()
 
     return redirect(f"/profile?user_id={user_id}")
 

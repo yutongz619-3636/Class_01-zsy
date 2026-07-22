@@ -5,6 +5,10 @@
     {% if user_info %}
         <h1 class="card-title">个人中心</h1>
 
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
         <ul class="info-list">
             <li class="info-item">
                 <span class="info-label">ID</span>
@@ -28,14 +32,13 @@
             </li>
         </ul>
 
-        <!-- 充值表单 -->
+        <!-- 充值表单（user_id 从 session 获取，不从表单传入） -->
         <div style="margin-top: 30px; padding-top: 24px; border-top: 1px solid #eee;">
             <h3 style="margin-bottom: 16px; color: #555;">充值</h3>
             <form method="post" action="/recharge">
-                <input type="hidden" name="user_id" value="{{ user_info.id }}">
                 <div class="form-group">
                     <label class="form-label" for="amount">充值金额</label>
-                    <input class="form-input" type="number" id="amount" name="amount" placeholder="输入充值金额" required>
+                    <input class="form-input" type="number" id="amount" name="amount" placeholder="输入充值金额（正数）" min="1" required>
                 </div>
                 <button class="btn btn-block" type="submit">充 值</button>
             </form>
