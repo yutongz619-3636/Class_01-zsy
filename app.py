@@ -48,6 +48,7 @@ def init_db():
     db_path = os.path.join("data", "users.db")
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
+    # 创建表（不含 balance，兼容旧数据库）
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,10 +58,39 @@ def init_db():
             phone TEXT
         )
     ''')
-    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES ('admin', 'admin123', 'admin@example.com', '13800138000')")
-    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES ('alice', 'alice2025', 'alice@example.com', '13900139001')")
+    # 尝试添加 balance 列（如果已存在会静默忽略）
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN balance INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # 列已存在，忽略
+    # 插入默认用户（INSERT OR IGNORE 防止重复）
+    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone, balance) VALUES ('admin', 'admin123', 'admin@example.com', '13800138000', 99999)")
+    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone, balance) VALUES ('alice', 'alice2025', 'alice@example.com', '13900139001', 100)")
+    # 确保已有用户有余额
+    c.execute("UPDATE users SET balance = 99999 WHERE username = 'admin' AND (balance IS NULL OR balance = 0)")
+    c.execute("UPDATE users SET balance = 100 WHERE username = 'alice' AND (balance IS NULL OR balance = 0)")
     conn.commit()
     conn.close()
+
+
+@app.context_processor
+def inject_current_user_id():
+    """在全局模板中注入当前登录用户的 user_id"""
+    username = session.get("username")
+    user_id = None
+    if username:
+        try:
+            db_path = os.path.join("data", "users.db")
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute(f"SELECT id FROM users WHERE username = '{username}'")
+            row = c.fetchone()
+            if row:
+                user_id = row[0]
+            conn.close()
+        except Exception:
+            pass
+    return dict(current_user_id=user_id)
 
 
 @app.route("/")
@@ -193,6 +223,57 @@ def upload():
                                 file_url = url_for("static", filename=f"uploads/{new_filename}")
 
     return render_template("upload.html", file_url=file_url, error=error)
+
+
+@app.route("/profile")
+def profile():
+    # 从 URL 参数获取 user_id，不验证权限
+    user_id = request.args.get("user_id", type=int)
+    user_info = None
+
+    if user_id:
+        db_path = os.path.join("data", "users.db")
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        try:
+            c.execute(f"SELECT id, username, email, phone, balance FROM users WHERE id = {user_id}")
+            row = c.fetchone()
+            if row:
+                user_info = {
+                    "id": row[0],
+                    "username": row[1],
+                    "email": row[2],
+                    "phone": row[3],
+                    "balance": row[4],
+                }
+        except Exception as e:
+            print(f"[SQL ERROR] {e}")
+        finally:
+            conn.close()
+
+    return render_template("profile.html", user_info=user_info)
+
+
+@app.route("/recharge", methods=["POST"])
+def recharge():
+    user_id = request.form.get("user_id", type=int)
+    amount = request.form.get("amount", type=int, default=0)
+
+    if user_id is not None:
+        db_path = os.path.join("data", "users.db")
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        try:
+            # 直接修改余额，不做正负校验
+            c.execute(f"UPDATE users SET balance = balance + {amount} WHERE id = {user_id}")
+            conn.commit()
+            print(f"[RECHARGE] user_id={user_id}, amount={amount}")
+        except Exception as e:
+            print(f"[SQL ERROR] {e}")
+        finally:
+            conn.close()
+
+    return redirect(f"/profile?user_id={user_id}")
 
 
 if __name__ == "__main__":

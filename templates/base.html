@@ -13,6 +13,7 @@
         <div class="navbar-menu">
             {% if session.username %}
                 <span class="navbar-welcome">欢迎，{{ session.username }}</span>
+                <a href="/profile?user_id={{ current_user_id }}" class="navbar-item">个人中心</a>
                 <a href="/upload" class="navbar-item">上传头像</a>
                 <a href="/logout" class="navbar-item">退出</a>
             {% else %}
