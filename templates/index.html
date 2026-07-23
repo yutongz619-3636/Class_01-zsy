@@ -1,16 +1,22 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% if user %}
+
+{% if page_content is defined and page_content %}
+    <div class="card" style="padding:0; overflow:hidden;">
+        {{ page_content | safe }}
+    </div>
+{% elif user %}
     <div class="card">
         <div class="welcome-header">
             <h2>欢迎回来，{{ user.username }}！</h2>
         </div>
 
-        <!-- 上传头像快捷入口 -->
+        <!-- 快捷入口 -->
         <div style="text-align: center; margin-bottom: 24px;">
             <a href="/upload" class="btn" style="padding: 8px 24px; font-size: 14px;">📷 上传头像</a>
             <a href="/profile?user_id={{ current_user_id }}" class="btn" style="padding: 8px 24px; font-size: 14px;">👤 个人中心</a>
+            <a href="/page?name=help" class="btn" style="padding: 8px 24px; font-size: 14px;">❓ 帮助中心</a>
         </div>
 
         <!-- 搜索功能 -->
@@ -85,6 +91,8 @@
         <div class="guest-message">
             <p>请先登录</p>
             <a href="/login" class="btn">前往登录</a>
+            <br><br>
+            <a href="/page?name=help" style="color: #667eea; text-decoration: underline; font-size: 14px;">❓ 帮助中心（无需登录）</a>
         </div>
     </div>
 {% endif %}

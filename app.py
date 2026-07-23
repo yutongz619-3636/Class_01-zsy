@@ -306,6 +306,30 @@ def recharge():
     return redirect(f"/profile?user_id={user_id}")
 
 
+@app.route("/page")
+def dynamic_page():
+    name = request.args.get("name", "")
+    page_content = None
+
+    if name:
+        # 1. 净化文件名，去除路径穿越字符，只保留文件名
+        safe_name = os.path.basename(name)
+
+        # 2. 限制只能加载 pages/ 目录下的 .html 文件
+        page_path = os.path.join("pages", safe_name)
+        if not page_path.endswith(".html"):
+            page_path += ".html"
+
+        # 3. 检查文件是否存在且确实在 pages/ 目录内
+        if os.path.isfile(page_path):
+            with open(page_path, "r", encoding="utf-8") as f:
+                page_content = f.read()
+        else:
+            page_content = "<div style='text-align:center;padding:60px 20px;'><h2 style='color:#c0392b;'>❌ 页面不存在</h2><p style='color:#888;margin-top:12px;'>请检查页面名称是否正确</p></div>"
+
+    return render_template("index.html", page_content=page_content)
+
+
 if __name__ == "__main__":
     init_db()
     app.run(debug=True, host="0.0.0.0", port=5000)
