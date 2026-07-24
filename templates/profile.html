@@ -32,15 +32,34 @@
             </li>
         </ul>
 
-        <!-- 充值表单（user_id 从 session 获取，不从表单传入） -->
+        <!-- 充值表单 -->
         <div style="margin-top: 30px; padding-top: 24px; border-top: 1px solid #eee;">
             <h3 style="margin-bottom: 16px; color: #555;">充值</h3>
             <form method="post" action="/recharge">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="form-group">
                     <label class="form-label" for="amount">充值金额</label>
                     <input class="form-input" type="number" id="amount" name="amount" placeholder="输入充值金额（正数）" min="1" required>
                 </div>
                 <button class="btn btn-block" type="submit">充 值</button>
+            </form>
+        </div>
+
+        <!-- 修改密码表单 -->
+        <div style="margin-top: 30px; padding-top: 24px; border-top: 1px solid #eee;">
+            <h3 style="margin-bottom: 16px; color: #555;">修改密码</h3>
+            <form method="post" action="/change-password">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="username" value="{{ user_info.username }}">
+                <div class="form-group">
+                    <label class="form-label" for="new_password">新密码</label>
+                    <input class="form-input" type="password" id="new_password" name="new_password" placeholder="输入新密码" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="confirm_password">确认密码</label>
+                    <input class="form-input" type="password" id="confirm_password" name="confirm_password" placeholder="再次输入新密码" required>
+                </div>
+                <button class="btn btn-block" type="submit">修改密码</button>
             </form>
         </div>
     {% else %}

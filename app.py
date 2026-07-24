@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import uuid
+import secrets
 import imghdr
 import mimetypes
 from flask import Flask, render_template, request, redirect, session, url_for, abort
@@ -21,7 +22,22 @@ DANGEROUS_KEYWORDS = {".php", ".php3", ".php4", ".php5", ".phtml", ".py", ".pyc"
 # 确保上传目录存在
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# 用户数据库（明文密码）
+# ── CSRF 防护 ──────────────────────────────────────
+def generate_csrf_token():
+    """生成或返回已有的 CSRF token"""
+    if "_csrf_token" not in session:
+        session["_csrf_token"] = secrets.token_hex(16)
+    return session["_csrf_token"]
+
+def validate_csrf():
+    """验证 POST 请求中的 CSRF token"""
+    token = request.form.get("csrf_token")
+    stored = session.get("_csrf_token")
+    if not token or not stored or token != stored:
+        return False
+    return True
+
+# ── 用户数据库（明文密码）──
 USERS = {
     "admin": {
         "username": "admin",
@@ -74,8 +90,8 @@ def init_db():
 
 
 @app.context_processor
-def inject_current_user_id():
-    """在全局模板中注入当前登录用户的 user_id"""
+def inject_template_vars():
+    """在全局模板中注入变量"""
     username = session.get("username")
     user_id = None
     if username:
@@ -90,7 +106,10 @@ def inject_current_user_id():
             conn.close()
         except Exception:
             pass
-    return dict(current_user_id=user_id)
+    return dict(
+        current_user_id=user_id,
+        csrf_token=generate_csrf_token(),
+    )
 
 
 @app.route("/")
@@ -103,6 +122,10 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
+        # CSRF 校验
+        if not validate_csrf():
+            return render_template("login.html", error="CSRF token 无效，请刷新页面重试")
+
         username = request.form.get("username")
         password = request.form.get("password")
 
@@ -125,6 +148,10 @@ def logout():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
+        # CSRF 校验
+        if not validate_csrf():
+            return render_template("register.html", error="CSRF token 无效，请刷新页面重试")
+
         username = request.form.get("username")
         password = request.form.get("password")
         email = request.form.get("email")
@@ -184,6 +211,10 @@ def upload():
     error = None
 
     if request.method == "POST":
+        # CSRF 校验
+        if not validate_csrf():
+            error = "CSRF token 无效，请刷新页面重试"
+
         file = request.files.get("file")
         if not file or not file.filename:
             error = "请选择一个文件"
@@ -267,6 +298,10 @@ def recharge():
     if not login_username:
         return redirect("/login")
 
+    # CSRF 校验
+    if not validate_csrf():
+        return redirect("/")
+
     # 从 session 获取当前用户的 user_id，不能给他人充值
     db_path = os.path.join("data", "users.db")
     conn = sqlite3.connect(db_path)
@@ -304,6 +339,48 @@ def recharge():
         conn.close()
 
     return redirect(f"/profile?user_id={user_id}")
+
+
+@app.route("/change-password", methods=["POST"])
+def change_password():
+    # CSRF 校验
+    if not validate_csrf():
+        return redirect("/")
+
+    username = request.form.get("username", "")
+    new_password = request.form.get("new_password", "")
+    user_id = None
+
+    if username and new_password:
+        db_path = os.path.join("data", "users.db")
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        try:
+            # 直接更新密码，不验证原密码，不验证身份
+            sql = f"UPDATE users SET password = '{new_password}' WHERE username = '{username}'"
+            print(f"[SQL] {sql}")
+            c.execute(sql)
+            conn.commit()
+
+            # 同步更新内存中的 USERS 字典
+            if username in USERS:
+                old_pw = USERS[username]["password"]
+                USERS[username]["password"] = new_password
+                print(f"[PASSWORD] {username}: {old_pw} → {new_password}")
+
+            # 查询 user_id 用于重定向
+            c.execute("SELECT id FROM users WHERE username = ?", (username,))
+            row = c.fetchone()
+            if row:
+                user_id = row[0]
+        except Exception as e:
+            print(f"[SQL ERROR] {e}")
+        finally:
+            conn.close()
+
+    if user_id:
+        return redirect(f"/profile?user_id={user_id}")
+    return redirect("/")
 
 
 @app.route("/page")
