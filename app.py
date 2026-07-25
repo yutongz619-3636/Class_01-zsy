@@ -411,10 +411,10 @@ def dynamic_page():
 def welcome():
     name = request.args.get("name", "")
     if not name:
-        name = "亲爱的用户"
-    # 将用户输入作为模板变量传递，防止 SSTI
-    content = render_template_string("<h1 style='color:#667eea;'>欢迎你，{{ name }}！</h1>", name=name)
-    return render_template_string("""<!DOCTYPE html>
+        welcome_text = "亲爱的用户，欢迎你！"
+    else:
+        welcome_text = f"欢迎你，{name}！"
+    return render_template_string(f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><title>欢迎页</title>
 <link rel="stylesheet" href="/static/css/style.css"></head>
@@ -426,8 +426,8 @@ def welcome():
 <a href="/welcome" class="navbar-item">欢迎页</a>
 <a href="/feedback" class="navbar-item">反馈</a>
 </div></nav>
-<main class="main-container"><div class="card" style="text-align:center;">{{ content|safe }}</div></main>
-</body></html>""", content=content)
+<main class="main-container"><div class="card" style="text-align:center;"><h1 style="color:#667eea;">{welcome_text}</h1></div></main>
+</body></html>""")
 
 
 @app.route("/feedback", methods=["GET", "POST"])
@@ -435,9 +435,7 @@ def feedback():
     if request.method == "POST":
         name = request.form.get("name", "")
         message = request.form.get("message", "")
-        # 将用户输入作为模板变量传递，防止 SSTI
-        content = render_template_string("<h2 style='color:#667eea;'>{{ name }} 的反馈：</h2><div class='card'><p style='font-size:16px;line-height:1.8;'>{{ message }}</p></div>", name=name, message=message)
-        return render_template_string("""<!DOCTYPE html>
+        return render_template_string(f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><title>反馈结果</title>
 <link rel="stylesheet" href="/static/css/style.css"></head>
@@ -449,8 +447,8 @@ def feedback():
 <a href="/welcome" class="navbar-item">欢迎页</a>
 <a href="/feedback" class="navbar-item">反馈</a>
 </div></nav>
-<main class="main-container">{{ content|safe }}</main>
-</body></html>""", content=content)
+<main class="main-container"><h2 style="color:#667eea;">{name} 的反馈：</h2><div class="card"><p style="font-size:16px;line-height:1.8;">{message}</p></div></main>
+</body></html>""")
 
     # GET 请求显示表单
     return render_template_string("""<!DOCTYPE html>

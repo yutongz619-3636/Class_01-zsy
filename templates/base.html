@@ -11,10 +11,10 @@
     <nav class="navbar">
         <div class="navbar-brand">用户管理系统</div>
         <div class="navbar-menu">
+            <a href="/welcome" class="navbar-item">欢迎页</a>
+            <a href="/feedback" class="navbar-item">反馈</a>
             {% if session.username %}
                 <span class="navbar-welcome">欢迎，{{ session.username }}</span>
-                <a href="/welcome" class="navbar-item">欢迎页</a>
-                <a href="/feedback" class="navbar-item">反馈</a>
                 <a href="/profile?user_id={{ current_user_id }}" class="navbar-item">个人中心</a>
                 <a href="/upload" class="navbar-item">上传头像</a>
                 <a href="/logout" class="navbar-item">退出</a>
