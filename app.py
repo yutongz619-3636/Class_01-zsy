@@ -4,7 +4,7 @@ import uuid
 import secrets
 import imghdr
 import mimetypes
-from flask import Flask, render_template, request, redirect, session, url_for, abort
+from flask import Flask, render_template, render_template_string, request, redirect, session, url_for, abort
 
 app = Flask(__name__)
 app.secret_key = "dev-key-2025"
@@ -405,6 +405,77 @@ def dynamic_page():
             page_content = "<div style='text-align:center;padding:60px 20px;'><h2 style='color:#c0392b;'>❌ 页面不存在</h2><p style='color:#888;margin-top:12px;'>请检查页面名称是否正确</p></div>"
 
     return render_template("index.html", page_content=page_content)
+
+
+@app.route("/welcome")
+def welcome():
+    name = request.args.get("name", "")
+    if not name:
+        name = "亲爱的用户"
+    # 将用户输入作为模板变量传递，防止 SSTI
+    content = render_template_string("<h1 style='color:#667eea;'>欢迎你，{{ name }}！</h1>", name=name)
+    return render_template_string("""<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>欢迎页</title>
+<link rel="stylesheet" href="/static/css/style.css"></head>
+<body>
+<nav class="navbar">
+<div class="navbar-brand">用户管理系统</div>
+<div class="navbar-menu">
+<a href="/" class="navbar-item">首页</a>
+<a href="/welcome" class="navbar-item">欢迎页</a>
+<a href="/feedback" class="navbar-item">反馈</a>
+</div></nav>
+<main class="main-container"><div class="card" style="text-align:center;">{{ content|safe }}</div></main>
+</body></html>""", content=content)
+
+
+@app.route("/feedback", methods=["GET", "POST"])
+def feedback():
+    if request.method == "POST":
+        name = request.form.get("name", "")
+        message = request.form.get("message", "")
+        # 将用户输入作为模板变量传递，防止 SSTI
+        content = render_template_string("<h2 style='color:#667eea;'>{{ name }} 的反馈：</h2><div class='card'><p style='font-size:16px;line-height:1.8;'>{{ message }}</p></div>", name=name, message=message)
+        return render_template_string("""<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>反馈结果</title>
+<link rel="stylesheet" href="/static/css/style.css"></head>
+<body>
+<nav class="navbar">
+<div class="navbar-brand">用户管理系统</div>
+<div class="navbar-menu">
+<a href="/" class="navbar-item">首页</a>
+<a href="/welcome" class="navbar-item">欢迎页</a>
+<a href="/feedback" class="navbar-item">反馈</a>
+</div></nav>
+<main class="main-container">{{ content|safe }}</main>
+</body></html>""", content=content)
+
+    # GET 请求显示表单
+    return render_template_string("""<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>意见反馈</title>
+<link rel="stylesheet" href="/static/css/style.css"></head>
+<body>
+<nav class="navbar">
+<div class="navbar-brand">用户管理系统</div>
+<div class="navbar-menu">
+<a href="/" class="navbar-item">首页</a>
+<a href="/welcome" class="navbar-item">欢迎页</a>
+<a href="/feedback" class="navbar-item">反馈</a>
+</div></nav>
+<main class="main-container">
+<div class="card">
+<h1 class="card-title">意见反馈</h1>
+<form method="post" action="/feedback">
+<div class="form-group"><label class="form-label">姓名</label><input class="form-input" type="text" name="name" placeholder="请输入姓名" required></div>
+<div class="form-group"><label class="form-label">留言</label><textarea class="form-input" name="message" rows="5" placeholder="请输入反馈内容" required style="resize:vertical;"></textarea></div>
+<button class="btn btn-block" type="submit">提交反馈</button>
+</form>
+</div>
+</main>
+</body></html>""")
 
 
 if __name__ == "__main__":
