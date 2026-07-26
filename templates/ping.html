@@ -5,6 +5,7 @@
     <h1 class="card-title">Ping 网络诊断</h1>
 
     <form method="post" action="/ping">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="form-group">
             <label class="form-label" for="ip">IP 地址</label>
             <input

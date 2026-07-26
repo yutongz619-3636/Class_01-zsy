@@ -2,15 +2,14 @@ import sqlite3
 import os
 import uuid
 import secrets
-import imghdr
 import mimetypes
 import ipaddress
 import platform
 import subprocess
-from flask import Flask, render_template, render_template_string, request, redirect, session, url_for, abort
+from flask import Flask, render_template, request, redirect, session, url_for, abort
 
 app = Flask(__name__)
-app.secret_key = "dev-key-2025"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
 # 上传配置
@@ -24,6 +23,20 @@ DANGEROUS_KEYWORDS = {".php", ".php3", ".php4", ".php5", ".phtml", ".py", ".pyc"
 
 # 确保上传目录存在
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def is_valid_image_file(path):
+    with open(path, "rb") as f:
+        header = f.read(16)
+
+    return (
+        header.startswith(b"\xff\xd8\xff")
+        or header.startswith(b"\x89PNG\r\n\x1a\n")
+        or header.startswith((b"GIF87a", b"GIF89a"))
+        or header.startswith(b"BM")
+        or (header.startswith(b"RIFF") and header[8:12] == b"WEBP")
+    )
+
 
 # ── CSRF 防护 ──────────────────────────────────────
 def generate_csrf_token():
@@ -163,10 +176,10 @@ def register():
         db_path = os.path.join("data", "users.db")
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
-        sql = f"INSERT INTO users (username, password, email, phone) VALUES ('{username}', '{password}', '{email}', '{phone}')"
-        print(f"[SQL] {sql}")
+        sql = "INSERT INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)"
+        print("[SQL] INSERT INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)")
         try:
-            c.execute(sql)
+            c.execute(sql, (username, password, email, phone))
             conn.commit()
             return render_template("login.html", error="注册成功，请登录")
         except sqlite3.IntegrityError:
@@ -186,10 +199,11 @@ def search():
         db_path = os.path.join("data", "users.db")
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
-        sql = f"SELECT id, username, email, phone FROM users WHERE username LIKE '%{keyword}%' OR email LIKE '%{keyword}%'"
-        print(f"[SQL] {sql}")
+        sql = "SELECT id, username, email, phone FROM users WHERE username LIKE ? OR email LIKE ?"
+        keyword_like = f"%{keyword}%"
+        print("[SQL] SELECT id, username, email, phone FROM users WHERE username LIKE ? OR email LIKE ?")
         try:
-            c.execute(sql)
+            c.execute(sql, (keyword_like, keyword_like))
             rows = c.fetchall()
             for row in rows:
                 results.append({"id": row[0], "username": row[1], "email": row[2], "phone": row[3]})
@@ -250,7 +264,7 @@ def upload():
                             file.save(save_path)
 
                             # 6. 二次校验：读取文件头确认是真实图片
-                            if imghdr.what(save_path) is None:
+                            if not is_valid_image_file(save_path):
                                 os.remove(save_path)
                                 error = "文件内容不是有效图片"
                             else:
@@ -270,6 +284,10 @@ def ping():
     output = None
 
     if request.method == "POST":
+        if not validate_csrf():
+            output = "CSRF token 无效，请刷新页面重试"
+            return render_template("ping.html", ip=ip, output=output), 400
+
         ip = request.form.get("ip", "").strip()
 
         try:
@@ -410,9 +428,9 @@ def change_password():
         c = conn.cursor()
         try:
             # 直接更新密码，不验证原密码，不验证身份
-            sql = f"UPDATE users SET password = '{new_password}' WHERE username = '{username}'"
-            print(f"[SQL] {sql}")
-            c.execute(sql)
+            sql = "UPDATE users SET password = ? WHERE username = ?"
+            print("[SQL] UPDATE users SET password = ? WHERE username = ?")
+            c.execute(sql, (new_password, username))
             conn.commit()
 
             # 同步更新内存中的 USERS 字典
@@ -467,68 +485,23 @@ def welcome():
         welcome_text = "亲爱的用户，欢迎你！"
     else:
         welcome_text = f"欢迎你，{name}！"
-    return render_template_string(f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head><meta charset="UTF-8"><title>欢迎页</title>
-<link rel="stylesheet" href="/static/css/style.css"></head>
-<body>
-<nav class="navbar">
-<div class="navbar-brand">用户管理系统</div>
-<div class="navbar-menu">
-<a href="/" class="navbar-item">首页</a>
-<a href="/welcome" class="navbar-item">欢迎页</a>
-<a href="/feedback" class="navbar-item">反馈</a>
-</div></nav>
-<main class="main-container"><div class="card" style="text-align:center;"><h1 style="color:#667eea;">{welcome_text}</h1></div></main>
-</body></html>""")
+    return render_template("welcome.html", welcome_text=welcome_text, name=name)
 
 
 @app.route("/feedback", methods=["GET", "POST"])
 def feedback():
     if request.method == "POST":
+        if not validate_csrf():
+            return render_template("feedback.html", error="CSRF token 无效，请刷新页面重试"), 400
+
         name = request.form.get("name", "")
         message = request.form.get("message", "")
-        return render_template_string(f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head><meta charset="UTF-8"><title>反馈结果</title>
-<link rel="stylesheet" href="/static/css/style.css"></head>
-<body>
-<nav class="navbar">
-<div class="navbar-brand">用户管理系统</div>
-<div class="navbar-menu">
-<a href="/" class="navbar-item">首页</a>
-<a href="/welcome" class="navbar-item">欢迎页</a>
-<a href="/feedback" class="navbar-item">反馈</a>
-</div></nav>
-<main class="main-container"><h2 style="color:#667eea;">{name} 的反馈：</h2><div class="card"><p style="font-size:16px;line-height:1.8;">{message}</p></div></main>
-</body></html>""")
+        return render_template("feedback.html", name=name, message=message)
 
     # GET 请求显示表单
-    return render_template_string("""<!DOCTYPE html>
-<html lang="zh-CN">
-<head><meta charset="UTF-8"><title>意见反馈</title>
-<link rel="stylesheet" href="/static/css/style.css"></head>
-<body>
-<nav class="navbar">
-<div class="navbar-brand">用户管理系统</div>
-<div class="navbar-menu">
-<a href="/" class="navbar-item">首页</a>
-<a href="/welcome" class="navbar-item">欢迎页</a>
-<a href="/feedback" class="navbar-item">反馈</a>
-</div></nav>
-<main class="main-container">
-<div class="card">
-<h1 class="card-title">意见反馈</h1>
-<form method="post" action="/feedback">
-<div class="form-group"><label class="form-label">姓名</label><input class="form-input" type="text" name="name" placeholder="请输入姓名" required></div>
-<div class="form-group"><label class="form-label">留言</label><textarea class="form-input" name="message" rows="5" placeholder="请输入反馈内容" required style="resize:vertical;"></textarea></div>
-<button class="btn btn-block" type="submit">提交反馈</button>
-</form>
-</div>
-</main>
-</body></html>""")
+    return render_template("feedback.html")
 
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=False, host="127.0.0.1", port=5000)
