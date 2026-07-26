@@ -4,7 +4,9 @@ import uuid
 import secrets
 import imghdr
 import mimetypes
-import subprocess, platform
+import ipaddress
+import platform
+import subprocess
 from flask import Flask, render_template, render_template_string, request, redirect, session, url_for, abort
 
 app = Flask(__name__)
@@ -268,13 +270,22 @@ def ping():
     output = None
 
     if request.method == "POST":
-        ip = request.form.get("ip", "")
-        command = f"ping -c 3 {ip}"
+        ip = request.form.get("ip", "").strip()
+
+        try:
+            # 只允许标准 IPv4/IPv6 地址，拒绝 Shell 元字符和额外参数。
+            ip = str(ipaddress.ip_address(ip))
+        except ValueError:
+            output = "IP 地址格式无效，请输入合法的 IPv4 或 IPv6 地址"
+            return render_template("ping.html", ip=ip, output=output)
+
+        count_flag = "-n" if platform.system() == "Windows" else "-c"
+        command = ["ping", count_flag, "3", ip]
 
         try:
             output = subprocess.check_output(
                 command,
-                shell=True,
+                shell=False,
                 stderr=subprocess.STDOUT,
                 timeout=30,
             ).decode("utf-8", errors="replace")
