@@ -141,6 +141,15 @@ class AuthenticationSecurityTest(unittest.TestCase):
         )
         self.assertIn("请先登录", self.client.get("/").get_data(as_text=True))
 
+    def test_sql_metacharacters_are_not_interpreted_in_search(self):
+        self.register(username="searchuser")
+        self.login(username="searchuser")
+        response = self.client.get("/search", query_string={"keyword": "%' OR 1=1 --"})
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("无搜索结果", body)
+        self.assertNotIn("searchuser</td>", body)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -67,6 +67,13 @@ class BusinessSecurityTest(unittest.TestCase):
         self.assertEqual(approved.status_code, 302)
         self.assertEqual(self.balance(self.member_id), before + 5000)
 
+        # 已审批记录无法被再次入账，验证条件更新可阻止重复审批。
+        repeated = self.admin_client.post(
+            f"/admin/recharge/{request_row['id']}/approve", data={"csrf_token": "csrf-test-token"}
+        )
+        self.assertEqual(repeated.status_code, 404)
+        self.assertEqual(self.balance(self.member_id), before + 5000)
+
         review_page = self.admin_client.get("/admin/recharge-requests")
         self.assertEqual(review_page.status_code, 200)
         self.assertIn("充值审核", review_page.get_data(as_text=True))

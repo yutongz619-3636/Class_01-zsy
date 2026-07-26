@@ -47,6 +47,8 @@ app.config.update(
     SESSION_COOKIE_SECURE=os.environ.get("FLASK_COOKIE_SECURE", "0") == "1",
     # 留空时仅允许公网地址；部署者可显式配置 CIDR 白名单以允许内网诊断。
     PING_ALLOWED_NETWORKS=os.environ.get("PING_ALLOWED_NETWORKS", ""),
+    # 可选的绝对路径；未配置时仅从受控部署环境的 PATH 查找 ping。
+    PING_EXECUTABLE=os.environ.get("PING_EXECUTABLE", ""),
 )
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -63,7 +65,7 @@ USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]{3,32}$")
 LOGIN_ATTEMPTS = {}
 PING_ATTEMPTS = defaultdict(deque)
 UPLOAD_LAST_ACTION = {}
-DUMMY_PASSWORD_HASH = generate_password_hash("not-the-user-password")
+DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 
 PRIVATE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
@@ -74,14 +76,18 @@ def get_db_connection():
     db_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(db_path, timeout=5)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
 
 @contextmanager
-def db_session():
+def db_session(immediate=False):
     """提供会自动提交/回滚并关闭连接的 SQLite 会话。"""
     connection = get_db_connection()
     try:
+        if immediate:
+            # 获取写锁后再读取，避免“先读后写”出现竞态条件。
+            connection.execute("BEGIN IMMEDIATE")
         yield connection
         connection.commit()
     except Exception:
@@ -124,6 +130,11 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
             """
+        )
+        # 每名用户只能有一条待审核申请；数据库约束可抵御并发重复提交。
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_recharge_one_pending "
+            "ON recharge_requests(user_id) WHERE status = 'pending'"
         )
         columns = table_columns(connection, "users")
         role_was_missing = "role" not in columns
@@ -300,6 +311,17 @@ def is_ping_target_allowed(address):
     return address.is_global
 
 
+def get_ping_executable():
+    configured_path = (app.config.get("PING_EXECUTABLE") or "").strip()
+    if configured_path:
+        candidate = Path(configured_path)
+        if candidate.is_absolute() and candidate.is_file():
+            return str(candidate)
+        app.logger.error("PING_EXECUTABLE 必须是存在的绝对路径")
+        return None
+    return shutil.which("ping")
+
+
 def avatar_path(filename):
     if not filename or not re.fullmatch(r"[a-f0-9]{32}\.png", filename):
         return None
@@ -376,6 +398,8 @@ def apply_security_headers(response):
         "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     )
+    if app.config["SESSION_COOKIE_SECURE"]:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     if request.endpoint in {"profile", "avatar"}:
         response.headers.setdefault("Cache-Control", "no-store, private")
     return response
@@ -547,7 +571,7 @@ def ping():
         if not rate_limit(PING_ATTEMPTS, user["id"], PING_RATE_LIMIT, PING_RATE_WINDOW_SECONDS):
             return render_template("ping.html", ip=str(address), output="Ping 请求过于频繁，请稍后再试"), 429
 
-        executable = shutil.which("ping")
+        executable = get_ping_executable()
         if not executable:
             app.logger.error("系统未找到 ping 可执行文件")
             return render_template("ping.html", ip=str(address), output="网络诊断服务暂不可用"), 503
@@ -598,18 +622,15 @@ def recharge():
         flash("充值金额必须是 1 到 9,999,999 之间的整数", "error")
         return redirect(url_for("profile"))
 
-    with db_session() as connection:
-        pending = connection.execute(
-            "SELECT id FROM recharge_requests WHERE user_id = ? AND status = 'pending' LIMIT 1",
-            (user["id"],),
-        ).fetchone()
-        if pending:
-            flash("已有待审核的充值申请，请勿重复提交", "error")
-            return redirect(url_for("profile"))
-        connection.execute(
-            "INSERT INTO recharge_requests (user_id, amount, status) VALUES (?, ?, 'pending')",
-            (user["id"], amount),
-        )
+    try:
+        with db_session(immediate=True) as connection:
+            connection.execute(
+                "INSERT INTO recharge_requests (user_id, amount, status) VALUES (?, ?, 'pending')",
+                (user["id"], amount),
+            )
+    except sqlite3.IntegrityError:
+        flash("已有待审核的充值申请，请勿重复提交", "error")
+        return redirect(url_for("profile"))
     flash("充值申请已提交，余额将在管理员审核后更新", "success")
     return redirect(url_for("profile"))
 
@@ -622,19 +643,19 @@ def approve_recharge(request_id):
     admin = get_current_user()
     if admin["role"] != "admin":
         abort(403)
-    with db_session() as connection:
-        request_row = connection.execute(
-            "SELECT user_id, amount, status FROM recharge_requests WHERE id = ?", (request_id,)
-        ).fetchone()
-        if request_row is None or request_row["status"] != "pending":
+    with db_session(immediate=True) as connection:
+        approved = connection.execute(
+            "UPDATE recharge_requests SET status = 'approved' WHERE id = ? AND status = 'pending'",
+            (request_id,),
+        )
+        if approved.rowcount != 1:
             abort(404)
+        request_row = connection.execute(
+            "SELECT user_id, amount FROM recharge_requests WHERE id = ?", (request_id,)
+        ).fetchone()
         connection.execute(
             "UPDATE users SET balance = balance + ? WHERE id = ?",
             (request_row["amount"], request_row["user_id"]),
-        )
-        connection.execute(
-            "UPDATE recharge_requests SET status = 'approved' WHERE id = ? AND status = 'pending'",
-            (request_id,),
         )
     flash("充值申请已审核", "success")
     return redirect(url_for("admin_recharge_requests"))

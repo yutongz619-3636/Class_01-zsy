@@ -11,13 +11,15 @@ class PingSecurityTest(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.original_config = {
-            key: app.config.get(key) for key in ("TESTING", "SECRET_KEY", "DATABASE_PATH", "PING_ALLOWED_NETWORKS")
+            key: app.config.get(key)
+            for key in ("TESTING", "SECRET_KEY", "DATABASE_PATH", "PING_ALLOWED_NETWORKS", "PING_EXECUTABLE")
         }
         app.config.update(
             TESTING=True,
             SECRET_KEY="test-only-secret",
             DATABASE_PATH=str(Path(self.temp_dir.name) / "users.db"),
             PING_ALLOWED_NETWORKS="127.0.0.0/8,::1/128",
+            PING_EXECUTABLE="",
         )
         init_db()
         with db_session() as connection:
@@ -112,6 +114,13 @@ class PingSecurityTest(unittest.TestCase):
         response = self.post_ping("127.0.0.1")
         self.assertEqual(response.status_code, 429)
         self.assertIn("过于频繁", response.get_data(as_text=True))
+
+    @patch("app.subprocess.check_output")
+    def test_relative_ping_binary_configuration_is_rejected(self, check_output):
+        app.config["PING_EXECUTABLE"] = "untrusted-relative-ping"
+        response = self.post_ping("127.0.0.1")
+        self.assertEqual(response.status_code, 503)
+        check_output.assert_not_called()
 
 
 if __name__ == "__main__":

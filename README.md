@@ -37,6 +37,7 @@ python3 app.py
 | `FLASK_SECRET_KEY` | 必填建议项；使用至少 32 字节的随机值，避免重启后会话失效。 |
 | `FLASK_COOKIE_SECURE=1` | HTTPS 部署时启用 Secure Cookie。 |
 | `PING_ALLOWED_NETWORKS` | 逗号分隔 CIDR 白名单，例如 `203.0.113.0/24`；未设置时仅允许公网地址。 |
+| `PING_EXECUTABLE` | 可选的 `ping` 绝对路径；配置后拒绝相对路径，降低 PATH 被污染的风险。 |
 | `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` | 仅在受控演示环境创建首个管理员；不要将值提交到 Git。 |
 
 ## 运行测试
@@ -46,6 +47,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 测试覆盖密码哈希与暴力破解防护、越权访问、充值审批、上传验证、文件包含、SSTI/XSS、Ping 命令注入和内网探测限制。
+
+仓库中的 GitHub Actions 会在推送后自动运行单元测试、Bandit 静态检查和 `pip-audit` 依赖审计。
 
 ## 生产提示
 
