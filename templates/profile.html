@@ -5,8 +5,10 @@
     {% if user_info %}
         <h1 class="card-title">个人中心</h1>
 
-        {% if error %}
-        <div class="alert alert-error">{{ error }}</div>
+        {% if user_info.avatar_filename %}
+        <div style="text-align:center; margin-bottom:20px;">
+            <img src="{{ url_for('avatar') }}" alt="我的头像" style="width:120px; height:120px; object-fit:cover; border-radius:50%; border:4px solid #667eea;">
+        </div>
         {% endif %}
 
         <ul class="info-list">
@@ -32,32 +34,50 @@
             </li>
         </ul>
 
-        <!-- 充值表单 -->
+        <!-- 充值申请表单：提交后需管理员审核，余额不会由用户请求直接修改 -->
         <div style="margin-top: 30px; padding-top: 24px; border-top: 1px solid #eee;">
-            <h3 style="margin-bottom: 16px; color: #555;">充值</h3>
+            <h3 style="margin-bottom: 8px; color: #555;">提交充值申请</h3>
+            <p style="color:#666; font-size:14px; margin-bottom:16px;">申请审核通过后才会更新余额。</p>
             <form method="post" action="/recharge">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="form-group">
                     <label class="form-label" for="amount">充值金额</label>
                     <input class="form-input" type="number" id="amount" name="amount" placeholder="输入充值金额（正数）" min="1" required>
                 </div>
-                <button class="btn btn-block" type="submit">充 值</button>
+                <button class="btn btn-block" type="submit">提交申请</button>
             </form>
         </div>
+
+        {% if recharge_requests %}
+        <div style="margin-top: 24px;">
+            <h3 style="margin-bottom: 12px; color: #555;">最近充值申请</h3>
+            <table class="search-table">
+                <thead><tr><th>申请编号</th><th>金额</th><th>状态</th><th>提交时间</th></tr></thead>
+                <tbody>
+                    {% for item in recharge_requests %}
+                    <tr><td>{{ item.id }}</td><td>{{ item.amount }}</td><td>{{ item.status }}</td><td>{{ item.created_at }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 
         <!-- 修改密码表单 -->
         <div style="margin-top: 30px; padding-top: 24px; border-top: 1px solid #eee;">
             <h3 style="margin-bottom: 16px; color: #555;">修改密码</h3>
             <form method="post" action="/change-password">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="username" value="{{ user_info.username }}">
+                <div class="form-group">
+                    <label class="form-label" for="current_password">当前密码</label>
+                    <input class="form-input" type="password" id="current_password" name="current_password" placeholder="输入当前密码" autocomplete="current-password" required>
+                </div>
                 <div class="form-group">
                     <label class="form-label" for="new_password">新密码</label>
-                    <input class="form-input" type="password" id="new_password" name="new_password" placeholder="输入新密码" required>
+                    <input class="form-input" type="password" id="new_password" name="new_password" placeholder="至少 8 位，含字母和数字" autocomplete="new-password" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="confirm_password">确认密码</label>
-                    <input class="form-input" type="password" id="confirm_password" name="confirm_password" placeholder="再次输入新密码" required>
+                    <input class="form-input" type="password" id="confirm_password" name="confirm_password" placeholder="再次输入新密码" autocomplete="new-password" required>
                 </div>
                 <button class="btn btn-block" type="submit">修改密码</button>
             </form>

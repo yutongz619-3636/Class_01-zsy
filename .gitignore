@@ -5,5 +5,8 @@ __pycache__/
 *.swo
 data/
 *.db
+uploads/
+output/
+*.docx
 hunter_output/
 fofa_output/

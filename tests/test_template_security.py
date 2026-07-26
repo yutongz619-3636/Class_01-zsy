@@ -36,6 +36,22 @@ class TemplateSecurityTest(unittest.TestCase):
         self.assertNotIn("49", body)
         self.assertNotIn("64", body)
 
+    def test_user_content_is_html_escaped(self):
+        payload = '<img src=x onerror=alert("xss")>'
+        response = self.client.post(
+            "/feedback",
+            data={
+                "csrf_token": "csrf-test-token",
+                "name": payload,
+                "message": payload,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertNotIn(payload, body)
+        self.assertIn("&lt;img", body)
+
 
 if __name__ == "__main__":
     unittest.main()

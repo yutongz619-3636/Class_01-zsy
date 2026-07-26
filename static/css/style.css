@@ -178,6 +178,12 @@ body {
     border: 1px solid #f5c6cb;
 }
 
+.alert-success {
+    background: #e6f6ea;
+    color: #1f7a3d;
+    border: 1px solid #b9e2c3;
+}
+
 /* 未登录提示 */
 .guest-message {
     text-align: center;

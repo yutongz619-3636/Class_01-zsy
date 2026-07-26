@@ -13,12 +13,18 @@
         <div class="navbar-menu">
             <a href="/welcome" class="navbar-item">欢迎页</a>
             <a href="/feedback" class="navbar-item">反馈</a>
-            {% if session.username %}
-                <span class="navbar-welcome">欢迎，{{ session.username }}</span>
-                <a href="/profile?user_id={{ current_user_id }}" class="navbar-item">个人中心</a>
+            {% if current_user_id %}
+                <span class="navbar-welcome">已登录</span>
+                <a href="/profile" class="navbar-item">个人中心</a>
                 <a href="/upload" class="navbar-item">上传头像</a>
                 <a href="/ping" class="navbar-item">Ping测试</a>
-                <a href="/logout" class="navbar-item">退出</a>
+                {% if current_user_role == 'admin' %}
+                <a href="/admin/recharge-requests" class="navbar-item">充值审核</a>
+                {% endif %}
+                <form method="post" action="/logout" style="display:inline; margin:0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button class="navbar-item" type="submit" style="border:0; background:transparent; cursor:pointer; font:inherit;">退出</button>
+                </form>
             {% else %}
                 <a href="/login" class="navbar-item">登录</a>
                 <a href="/register" class="navbar-item">注册</a>
@@ -28,6 +34,11 @@
 
     <!-- 主内容 -->
     <main class="main-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="alert {% if category == 'success' %}alert-success{% else %}alert-error{% endif %}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </main>
 </body>

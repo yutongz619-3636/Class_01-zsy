@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card" style="max-width:760px;">
+    <h1 class="card-title">帮助中心</h1>
+    <h3 style="margin-top:24px; color:#555;">如何开始使用？</h3>
+    <p>请先注册自己的账号，再使用账号密码登录。系统不会提供或展示默认账户密码。</p>
+
+    <h3 style="margin-top:24px; color:#555;">个人中心</h3>
+    <p>登录后可查看自己的资料、上传头像、提交充值申请及修改密码。个人中心只展示当前登录用户的数据。</p>
+
+    <h3 style="margin-top:24px; color:#555;">充值申请</h3>
+    <p>提交金额后，申请会进入待审核状态；余额只会在管理员审核通过后更新。</p>
+
+    <h3 style="margin-top:24px; color:#555;">Ping 网络诊断</h3>
+    <p>为避免服务端被用于内网探测，默认仅允许公网 IP 地址。部署者可在受控环境中通过白名单配置允许指定网段。</p>
+
+    <h3 style="margin-top:24px; color:#555;">上传头像</h3>
+    <p>仅支持常见图片格式，文件将被重新编码并以私有方式保存。每个账户只保留当前头像。</p>
+</div>
+{% endblock %}

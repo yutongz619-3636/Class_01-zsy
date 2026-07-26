@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card" style="max-width:900px;">
+    <h1 class="card-title">充值审核</h1>
+    {% if recharge_requests %}
+    <table class="search-table">
+        <thead>
+            <tr><th>申请编号</th><th>用户</th><th>金额</th><th>状态</th><th>提交时间</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+            {% for item in recharge_requests %}
+            <tr>
+                <td>{{ item.id }}</td><td>{{ item.username }}</td><td>{{ item.amount }}</td><td>{{ item.status }}</td><td>{{ item.created_at }}</td>
+                <td>
+                    {% if item.status == 'pending' %}
+                    <form method="post" action="{{ url_for('approve_recharge', request_id=item.id) }}" style="margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button class="btn" type="submit" style="padding:6px 12px; font-size:13px;">审核通过</button>
+                    </form>
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#666; text-align:center; padding:30px 0;">暂无充值申请</p>
+    {% endif %}
+</div>
+{% endblock %}
