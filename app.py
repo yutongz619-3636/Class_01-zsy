@@ -4,6 +4,7 @@ import uuid
 import secrets
 import imghdr
 import mimetypes
+import subprocess, platform
 from flask import Flask, render_template, render_template_string, request, redirect, session, url_for, abort
 
 app = Flask(__name__)
@@ -254,6 +255,47 @@ def upload():
                                 file_url = url_for("static", filename=f"uploads/{new_filename}")
 
     return render_template("upload.html", file_url=file_url, error=error)
+
+
+@app.route("/ping", methods=["GET", "POST"])
+def ping():
+    # 需要登录才能访问
+    username = session.get("username")
+    if not username:
+        return redirect("/login")
+
+    ip = ""
+    output = None
+
+    if request.method == "POST":
+        ip = request.form.get("ip", "")
+        command = f"ping -c 3 {ip}"
+
+        try:
+            output = subprocess.check_output(
+                command,
+                shell=True,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            ).decode("utf-8", errors="replace")
+        except subprocess.CalledProcessError as e:
+            error_output = e.output or str(e)
+            output = (
+                error_output.decode("utf-8", errors="replace")
+                if isinstance(error_output, bytes)
+                else str(error_output)
+            )
+        except subprocess.TimeoutExpired as e:
+            error_output = e.output or "Ping 命令执行超时"
+            output = (
+                error_output.decode("utf-8", errors="replace")
+                if isinstance(error_output, bytes)
+                else str(error_output)
+            )
+        except Exception as e:
+            output = str(e)
+
+    return render_template("ping.html", ip=ip, output=output)
 
 
 @app.route("/profile")
